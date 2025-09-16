@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Example structs with CSV annotations
@@ -22,6 +23,13 @@ type Product struct {
 	Price       float64 `csv:"price"`
 	InStock     bool    `csv:"in_stock"`
 	Description string  `csv:"description"`
+}
+
+type Event struct {
+	Name      string     `csv:"event_name,required"`
+	StartDate time.Time  `csv:"start_date"`
+	EndTime   *time.Time `csv:"end_time"`
+	Duration  int        `csv:"duration_minutes"`
 }
 
 func TestCSVIterator_Basic(t *testing.T) {
@@ -275,4 +283,102 @@ Jane Smith,25,jane@example.com,60000,false`
 		fmt.Printf("Processing: %s (Age: %d)\n", person.Name, person.Age)
 		return true // Continue iteration
 	})
+}
+
+func TestCSVIterator_TimeSupport(t *testing.T) {
+	csvData := `event_name,start_date,end_time,duration_minutes
+Conference,2024-03-15,2024-03-15T18:00:00Z,480
+Workshop,03/20/2024 09:00:00,,240
+Meeting,2024-03-22 14:30:00,2024-03-22T16:00:00Z,90
+Webinar,2024-04-01T10:00:00Z,2024-04-01T11:30:00Z,90`
+
+	reader := strings.NewReader(csvData)
+	iterator, err := NewFromReader[Event](reader)
+	if err != nil {
+		t.Fatalf("Failed to create iterator: %v", err)
+	}
+	defer iterator.Close()
+
+	events, err := iterator.ToSlice()
+	if err != nil {
+		t.Fatalf("Failed to read events: %v", err)
+	}
+
+	if len(events) != 4 {
+		t.Fatalf("Expected 4 events, got %d", len(events))
+	}
+
+	// Verify first event (date only format)
+	expectedDate1 := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
+	if !events[0].StartDate.Equal(expectedDate1) {
+		t.Errorf("Expected start date %v, got %v", expectedDate1, events[0].StartDate)
+	}
+	if events[0].EndTime == nil {
+		t.Error("Expected end time to be parsed, got nil")
+	} else {
+		expectedEndTime1 := time.Date(2024, 3, 15, 18, 0, 0, 0, time.UTC)
+		if !events[0].EndTime.Equal(expectedEndTime1) {
+			t.Errorf("Expected end time %v, got %v", expectedEndTime1, *events[0].EndTime)
+		}
+	}
+
+	// Verify second event (US datetime format, nil end time)
+	expectedDate2 := time.Date(2024, 3, 20, 9, 0, 0, 0, time.UTC)
+	if !events[1].StartDate.Equal(expectedDate2) {
+		t.Errorf("Expected start date %v, got %v", expectedDate2, events[1].StartDate)
+	}
+	if events[1].EndTime != nil {
+		t.Errorf("Expected nil end time, got %v", events[1].EndTime)
+	}
+
+	// Verify third event (SQL datetime format)
+	expectedDate3 := time.Date(2024, 3, 22, 14, 30, 0, 0, time.UTC)
+	if !events[2].StartDate.Equal(expectedDate3) {
+		t.Errorf("Expected start date %v, got %v", expectedDate3, events[2].StartDate)
+	}
+	if events[2].Duration != 90 {
+		t.Errorf("Expected duration 90, got %d", events[2].Duration)
+	}
+
+	// Verify fourth event (RFC3339 format)
+	expectedDate4 := time.Date(2024, 4, 1, 10, 0, 0, 0, time.UTC)
+	if !events[3].StartDate.Equal(expectedDate4) {
+		t.Errorf("Expected start date %v, got %v", expectedDate4, events[3].StartDate)
+	}
+}
+
+func ExampleNewFromReader_timeSupport() {
+	csvData := `event_name,start_date,end_time,duration_minutes
+Conference,2024-03-15,2024-03-15T18:00:00Z,480
+Workshop,03/20/2024 09:00:00,,240`
+
+	reader := strings.NewReader(csvData)
+	iterator, err := NewFromReader[Event](reader)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	defer iterator.Close()
+
+	for {
+		event, err := iterator.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error reading event: %v\n", err)
+			break
+		}
+		
+		fmt.Printf("Event: %s, Start: %s, Duration: %d mins\n", 
+			event.Name, event.StartDate.Format("2006-01-02 15:04"), event.Duration)
+		
+		if event.EndTime != nil {
+			fmt.Printf("  End: %s\n", event.EndTime.Format("2006-01-02 15:04"))
+		}
+	}
+	// Output:
+	// Event: Conference, Start: 2024-03-15 00:00, Duration: 480 mins
+	//   End: 2024-03-15 18:00
+	// Event: Workshop, Start: 2024-03-20 09:00, Duration: 240 mins
 }

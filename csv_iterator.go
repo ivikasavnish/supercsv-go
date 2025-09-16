@@ -43,6 +43,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // CSVIterator provides generic CSV parsing with struct annotations
@@ -315,6 +316,44 @@ func setFieldValue(fieldValue reflect.Value, strValue string, fieldType reflect.
 			return fmt.Errorf("invalid boolean: %s", strValue)
 		}
 		fieldValue.SetBool(boolVal)
+
+	case reflect.Struct:
+		// Handle time.Time specifically
+		if fieldType == reflect.TypeOf(time.Time{}) {
+			if strValue == "" {
+				return nil // Leave zero value
+			}
+			
+			// Try common time formats in order of preference
+			formats := []string{
+				time.RFC3339,     // "2006-01-02T15:04:05Z07:00"
+				time.RFC3339Nano, // "2006-01-02T15:04:05.999999999Z07:00"
+				"2006-01-02 15:04:05", // Common SQL datetime format
+				"2006-01-02",     // Date only
+				"15:04:05",       // Time only
+				"01/02/2006",     // US date format
+				"01/02/2006 15:04:05", // US datetime format
+				"02/01/2006",     // European date format
+				"02/01/2006 15:04:05", // European datetime format
+			}
+			
+			var timeVal time.Time
+			var err error
+			for _, format := range formats {
+				// Use UTC for formats without explicit timezone to ensure cross-platform consistency
+				if format == time.RFC3339 || format == time.RFC3339Nano {
+					timeVal, err = time.Parse(format, strValue)
+				} else {
+					timeVal, err = time.ParseInLocation(format, strValue, time.UTC)
+				}
+				if err == nil {
+					fieldValue.Set(reflect.ValueOf(timeVal))
+					return nil
+				}
+			}
+			return fmt.Errorf("invalid time format: %s (supported formats: RFC3339, YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, etc.)", strValue)
+		}
+		return fmt.Errorf("unsupported struct type: %s", fieldType)
 
 	case reflect.Ptr:
 		if strValue == "" {
