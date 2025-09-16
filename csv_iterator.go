@@ -69,7 +69,17 @@ func NewFromFile[T any](filepath string) (*CSVIterator[T], error) {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 
-	return newIterator[T](file, file)
+	return newIterator[T](file, file, ',')
+}
+
+// NewFromFileWithDelimiter creates a CSV iterator from a file path with custom delimiter
+func NewFromFileWithDelimiter[T any](filepath string, delimiter rune) (*CSVIterator[T], error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+
+	return newIterator[T](file, file, delimiter)
 }
 
 // NewFromURL creates a CSV iterator from a URL
@@ -84,17 +94,38 @@ func NewFromURL[T any](url string) (*CSVIterator[T], error) {
 		return nil, fmt.Errorf("HTTP error: %d %s", resp.StatusCode, resp.Status)
 	}
 
-	return newIterator[T](resp.Body, resp.Body)
+	return newIterator[T](resp.Body, resp.Body, ',')
+}
+
+// NewFromURLWithDelimiter creates a CSV iterator from a URL with custom delimiter
+func NewFromURLWithDelimiter[T any](url string, delimiter rune) (*CSVIterator[T], error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch URL: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("HTTP error: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	return newIterator[T](resp.Body, resp.Body, delimiter)
 }
 
 // NewFromReader creates a CSV iterator from an io.Reader
 func NewFromReader[T any](reader io.Reader) (*CSVIterator[T], error) {
-	return newIterator[T](reader, nil)
+	return newIterator[T](reader, nil, ',')
 }
 
-func newIterator[T any](reader io.Reader, closer io.Closer) (*CSVIterator[T], error) {
+// NewFromReaderWithDelimiter creates a CSV iterator from an io.Reader with custom delimiter
+func NewFromReaderWithDelimiter[T any](reader io.Reader, delimiter rune) (*CSVIterator[T], error) {
+	return newIterator[T](reader, nil, delimiter)
+}
+
+func newIterator[T any](reader io.Reader, closer io.Closer, delimiter rune) (*CSVIterator[T], error) {
 	csvReader := csv.NewReader(reader)
-	csvReader.FieldsPerRecord = -1 // Allow variable number of fields
+	csvReader.Comma = delimiter           // Set custom delimiter
+	csvReader.FieldsPerRecord = -1        // Allow variable number of fields
 
 	// Read headers
 	headers, err := csvReader.Read()

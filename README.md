@@ -16,6 +16,7 @@ A flexible, type-safe CSV parser for Go that uses struct annotations to map CSV 
 🚀 **Iterator Pattern** - Memory efficient row-by-row processing
 📦 **Batch Operations** - Convert to slice or use ForEach for bulk processing
 🛡️ **Type Safety** - Full compile-time type checking
+🔧 **Custom Delimiters** - Support for comma, semicolon, tab, and any custom delimiter
 
 ## Quick Start
 
@@ -36,14 +37,23 @@ type Person struct {
 ```go
 import "github.com/ivikasavnish/supercsv-go"
 
-// From file
+// From file (default comma delimiter)
 iterator, err := supercsv.NewFromFile[Person]("data.csv")
 
-// From URL  
+// From file with custom delimiter (semicolon)
+iterator, err := supercsv.NewFromFileWithDelimiter[Person]("data.csv", ';')
+
+// From URL (default comma delimiter)
 iterator, err := supercsv.NewFromURL[Person]("https://example.com/data.csv")
 
-// From reader
+// From URL with custom delimiter (semicolon)
+iterator, err := supercsv.NewFromURLWithDelimiter[Person]("https://example.com/data.csv", ';')
+
+// From reader (default comma delimiter)
 iterator, err := supercsv.NewFromReader[Person](reader)
+
+// From reader with custom delimiter (semicolon) 
+iterator, err := supercsv.NewFromReaderWithDelimiter[Person](reader, ';')
 
 defer iterator.Close()
 ```

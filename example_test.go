@@ -167,6 +167,43 @@ John,30`
 	}
 }
 
+func TestCSVIterator_CustomDelimiter(t *testing.T) {
+	csvData := `name;age;email
+John Doe;30;john@example.com
+Jane Smith;25;jane@example.com`
+
+	reader := strings.NewReader(csvData)
+	iterator, err := NewFromReaderWithDelimiter[Person](reader, ';')
+	if err != nil {
+		t.Fatalf("Failed to create iterator: %v", err)
+	}
+	defer iterator.Close()
+
+	var people []*Person
+	for {
+		person, err := iterator.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Failed to read person: %v", err)
+		}
+		people = append(people, person)
+	}
+
+	if len(people) != 2 {
+		t.Fatalf("Expected 2 people, got %d", len(people))
+	}
+
+	// Verify first person
+	if people[0].Name != "John Doe" {
+		t.Errorf("Expected name 'John Doe', got '%s'", people[0].Name)
+	}
+	if people[0].Age != 30 {
+		t.Errorf("Expected age 30, got %d", people[0].Age)
+	}
+}
+
 // Example usage functions
 func ExampleNewFromFile() {
 	// Create iterator from file
